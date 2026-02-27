@@ -1,0 +1,116 @@
+{
+  "version": "3.1",
+  "metrics": {
+    "AV": {
+      "name": "Attack Vector",
+      "values": {
+        "N": {
+          "label": "Network",
+          "description": "The vulnerability is exploitable remotely over a network.",
+          "severityWeight": 0.85
+        },
+        "A": {
+          "label": "Adjacent Network",
+          "description": "The vulnerability requires access to the same shared network.",
+          "severityWeight": 0.62
+        },
+        "L": {
+          "label": "Local",
+          "description": "The vulnerability requires local system access.",
+          "severityWeight": 0.55
+        },
+        "P": {
+          "label": "Physical",
+          "description": "The vulnerability requires physical interaction with the system.",
+          "severityWeight": 0.2
+        }
+      }
+    },
+    "PR": {
+      "name": "Privileges Required",
+      "values": {
+        "N": {
+          "label": "None",
+          "description": "No privileges are required to exploit the vulnerability.",
+          "severityWeight": 0.85
+        },
+        "L": {
+          "label": "Low",
+          "description": "Low-level privileges are required.",
+          "severityWeight": 0.62
+        },
+        "H": {
+          "label": "High",
+          "description": "High-level privileges are required.",
+          "severityWeight": 0.27
+        }
+      }
+    },
+    "UI": {
+      "name": "User Interaction",
+      "values": {
+        "N": {
+          "label": "None",
+          "description": "No user interaction is required.",
+          "severityWeight": 0.85
+        },
+        "R": {
+          "label": "Required",
+          "description": "User interaction is required to exploit the vulnerability.",
+          "severityWeight": 0.62
+        }
+      }
+    },
+    "C": {
+      "name": "Confidentiality Impact",
+      "values": {
+        "H": {
+          "label": "High",
+          "description": "Total loss of confidentiality."
+        },
+        "L": {
+          "label": "Low",
+          "description": "Partial loss of confidentiality."
+        },
+        "N": {
+          "label": "None",
+          "description": "No impact on confidentiality."
+        }
+      }
+    },
+    "I": {
+      "name": "Integrity Impact",
+      "values": {
+        "H": {
+          "label": "High",
+          "description": "Total loss of integrity."
+        },
+        "L": {
+          "label": "Low",
+          "description": "Partial loss of integrity."
+        },
+        "N": {
+          "label": "None",
+          "description": "No impact on integrity."
+        }
+      }
+    },
+    "A": {
+      "name": "Availability Impact",
+      "values": {
+        "H": {
+          "label": "High",
+          "description": "Total loss of availability."
+        },
+        "L": {
+          "label": "Low",
+          "description": "Partial loss of availability."
+        },
+        "N": {
+          "label": "None",
+          "description": "No impact on availability."
+        }
+      }
+    }
+  }
+}
