@@ -26,7 +26,6 @@ Development
 8. Select 'Start Scanner' under the 'Vulnerable Packages' view under 'Explorer'
 9. This should open the canvas!
 
-
 Installation (1 Command)
 Requirements: [e.g., Node 18+, Python 3.9+, API keys].
 Bash
