@@ -468,7 +468,9 @@ function classifyGooseError(err) {
     return { type: 'unknown', message: msg };
 }
 function stripAnsi(input) {
-    return input.replace(/\u001b\[[0-9;]*m/g, '');
+    const esc = String.fromCharCode(27);
+    const ansiPattern = new RegExp(`${esc}\\[[0-9;]*m`, 'g');
+    return input.replace(ansiPattern, '');
 }
 function findLastJsonObjectSpan(input) {
     let inString = false;
