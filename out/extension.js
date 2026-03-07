@@ -276,13 +276,30 @@ function getGooseConfig() {
         sharedCacheEnabled: cfg.get('sharedCacheEnabled', true)
     };
 }
+function resolveRecipePathForExtension(recipePath, projectRoot) {
+    if (path.isAbsolute(recipePath))
+        return recipePath;
+    const candidates = [];
+    if (extensionContext === null || extensionContext === void 0 ? void 0 : extensionContext.extensionPath) {
+        candidates.push(path.resolve(extensionContext.extensionPath, recipePath));
+    }
+    if (projectRoot) {
+        candidates.push(path.resolve(projectRoot, recipePath));
+    }
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate))
+            return candidate;
+    }
+    return recipePath;
+}
 function getRecipeVersion(recipePath) {
+    var _a, _b;
     try {
-        const resolved = path.resolve(recipePath);
+        const resolved = resolveRecipePathForExtension(recipePath, (_b = (_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.uri.fsPath);
         const stat = fs.statSync(resolved);
         return `${stat.mtimeMs}:${stat.size}`;
     }
-    catch (_a) {
+    catch (_c) {
         return 'unknown';
     }
 }
@@ -439,12 +456,13 @@ function runSecureGooseWithRetry(context, workingDir, recipePath, signal, maxRet
         let attempt = 0;
         let lastError = null;
         const max = Math.max(0, Math.min(3, maxRetries));
+        const resolvedRecipePath = resolveRecipePathForExtension(recipePath, workingDir);
         while (attempt <= max) {
             if (signal.aborted) {
                 throw new Error('Goose execution canceled');
             }
             try {
-                return yield (0, security_1.secureGooseExecution)(context, workingDir, recipePath, signal, timeoutMs);
+                return yield (0, security_1.secureGooseExecution)(context, workingDir, resolvedRecipePath, signal, timeoutMs);
             }
             catch (err) {
                 lastError = err;
@@ -908,6 +926,24 @@ function getWebviewContent(webview) {
           padding: 20px;
           margin: 20px 0;
           font-family: 'IBM Plex Mono', monospace;
+        }
+        .ai-pending {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 14px;
+          color: #C9C9C9;
+        }
+        .ai-spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(241,158,33,0.3);
+          border-top-color: #F19E21;
+          border-radius: 50%;
+          animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .ai-section:focus-within {
           border-color: #0678CF;
@@ -1782,7 +1818,7 @@ function getWebviewContent(webview) {
           if (insight.pending) {
             return '<div class="ai-section" role="status" aria-live="polite">' +
               '<div class="ai-header"><div class="ai-title"><i class="bi bi-robot"></i> AI Security Analysis</div></div>' +
-              '<div class="ai-content">Generating AI analysis…</div>' +
+              '<div class="ai-pending"><span class="ai-spinner" aria-hidden="true"></span><span>Generating AI analysis…</span></div>' +
               '<div style="margin-top:12px;"><button class="copy-after-btn" data-action="goose-cancel" aria-label="Cancel AI analysis">' +
               '<i class="bi bi-x-circle"></i> Cancel</button></div>' +
               '</div>';
