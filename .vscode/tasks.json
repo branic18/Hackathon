@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "npm run watch",
       "options": {
-        "cwd": "${workspaceFolder}/vulnerability-scanner"
+        "cwd": "${workspaceFolder}/vulnerability-scanner3"
       },
       "isBackground": true,
       "problemMatcher": [
