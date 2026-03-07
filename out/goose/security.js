@@ -146,6 +146,8 @@ function getMinimalEnvironment() {
             minimalEnv[varName] = process.env[varName];
         }
     });
+    // Reduce ANSI noise in stdout for machine parsing
+    minimalEnv.NO_COLOR = '1';
     return minimalEnv;
 }
 function resolveRecipePath(recipePath, workingDir) {

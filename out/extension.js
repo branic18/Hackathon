@@ -467,6 +467,83 @@ function classifyGooseError(err) {
         return { type: 'process_error', message: msg };
     return { type: 'unknown', message: msg };
 }
+function stripAnsi(input) {
+    return input.replace(/\u001b\[[0-9;]*m/g, '');
+}
+function findLastJsonObjectSpan(input) {
+    let inString = false;
+    let escape = false;
+    let depth = 0;
+    let start = -1;
+    let lastSpan = null;
+    for (let i = 0; i < input.length; i += 1) {
+        const ch = input[i];
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (ch === '\\\\') {
+            escape = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString)
+            continue;
+        if (ch === '{') {
+            if (depth === 0)
+                start = i;
+            depth += 1;
+        }
+        else if (ch === '}') {
+            if (depth > 0)
+                depth -= 1;
+            if (depth === 0 && start !== -1) {
+                lastSpan = { start, end: i + 1 };
+                start = -1;
+            }
+        }
+    }
+    return lastSpan;
+}
+function parseGooseOutput(raw) {
+    const cleaned = stripAnsi(raw).trim();
+    if (!cleaned) {
+        throw new Error('No output from Goose');
+    }
+    const lines = cleaned
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    if (lines.length > 0) {
+        const lastLine = lines[lines.length - 1];
+        if (lastLine.startsWith('{') && lastLine.endsWith('}')) {
+            return JSON.parse(lastLine);
+        }
+    }
+    const span = findLastJsonObjectSpan(cleaned);
+    if (span) {
+        const slice = cleaned.slice(span.start, span.end).trim();
+        if (slice.startsWith('{') && slice.endsWith('}')) {
+            return JSON.parse(slice);
+        }
+    }
+    throw new Error('Invalid JSON format from Goose');
+}
+function logGooseParseFailure(raw, err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const cleaned = stripAnsi(raw);
+    const max = 2000;
+    const head = cleaned.slice(0, max);
+    const tail = cleaned.length > max ? cleaned.slice(-max) : '';
+    logGoose(`Goose JSON parse failed: ${msg}`);
+    logGoose(`Goose raw stdout (head): ${head}`);
+    if (tail) {
+        logGoose(`Goose raw stdout (tail): ${tail}`);
+    }
+}
 async function runSecureGooseWithRetry(context, workingDir, recipePath, signal, maxRetries, timeoutMs) {
     let attempt = 0;
     let lastError = null;
@@ -711,9 +788,10 @@ async function onVulnSelected(vuln) {
         let parsedInsight = rawInsight;
         if (typeof rawInsight === 'string') {
             try {
-                parsedInsight = JSON.parse(rawInsight);
+                parsedInsight = parseGooseOutput(rawInsight);
             }
-            catch {
+            catch (err) {
+                logGooseParseFailure(rawInsight, err);
                 throw new Error('Invalid JSON format from Goose');
             }
         }
