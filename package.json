@@ -2,7 +2,11 @@
   "name": "trident-vulnerability-package-scanner",
   "displayName": "Trident Vulnerability Package Scanner",
   "publisher": "TridentTeam",
-  "version": "1.2.0",
+  "version": "1.2.1",
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/branic18/Trident.git"
+},
   "engines": {
     "vscode": "^1.109.0"
   },
