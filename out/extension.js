@@ -381,9 +381,25 @@ function getGooseConfig() {
         sharedCacheEnabled: cfg.get('sharedCacheEnabled', true)
     };
 }
+function resolveRecipePathForExtension(recipePath, projectRoot) {
+    if (path.isAbsolute(recipePath))
+        return recipePath;
+    const candidates = [];
+    if (extensionContext?.extensionPath) {
+        candidates.push(path.resolve(extensionContext.extensionPath, recipePath));
+    }
+    if (projectRoot) {
+        candidates.push(path.resolve(projectRoot, recipePath));
+    }
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate))
+            return candidate;
+    }
+    return recipePath;
+}
 function getRecipeVersion(recipePath) {
     try {
-        const resolved = path.resolve(recipePath);
+        const resolved = resolveRecipePathForExtension(recipePath, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
         const stat = fs.statSync(resolved);
         return `${stat.mtimeMs}:${stat.size}`;
     }
@@ -534,6 +550,85 @@ function classifyGooseError(err) {
         return { type: 'process_error', message: msg };
     return { type: 'unknown', message: msg };
 }
+function stripAnsi(input) {
+    const esc = String.fromCharCode(27);
+    const ansiPattern = new RegExp(`${esc}\\[[0-9;]*m`, 'g');
+    return input.replace(ansiPattern, '');
+}
+function findLastJsonObjectSpan(input) {
+    let inString = false;
+    let escape = false;
+    let depth = 0;
+    let start = -1;
+    let lastSpan = null;
+    for (let i = 0; i < input.length; i += 1) {
+        const ch = input[i];
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (ch === '\\\\') {
+            escape = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString)
+            continue;
+        if (ch === '{') {
+            if (depth === 0)
+                start = i;
+            depth += 1;
+        }
+        else if (ch === '}') {
+            if (depth > 0)
+                depth -= 1;
+            if (depth === 0 && start !== -1) {
+                lastSpan = { start, end: i + 1 };
+                start = -1;
+            }
+        }
+    }
+    return lastSpan;
+}
+function parseGooseOutput(raw) {
+    const cleaned = stripAnsi(raw).trim();
+    if (!cleaned) {
+        throw new Error('No output from Goose');
+    }
+    const lines = cleaned
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    if (lines.length > 0) {
+        const lastLine = lines[lines.length - 1];
+        if (lastLine.startsWith('{') && lastLine.endsWith('}')) {
+            return JSON.parse(lastLine);
+        }
+    }
+    const span = findLastJsonObjectSpan(cleaned);
+    if (span) {
+        const slice = cleaned.slice(span.start, span.end).trim();
+        if (slice.startsWith('{') && slice.endsWith('}')) {
+            return JSON.parse(slice);
+        }
+    }
+    throw new Error('Invalid JSON format from Goose');
+}
+function logGooseParseFailure(raw, err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const cleaned = stripAnsi(raw);
+    const max = 2000;
+    const head = cleaned.slice(0, max);
+    const tail = cleaned.length > max ? cleaned.slice(-max) : '';
+    logGoose(`Goose JSON parse failed: ${msg}`);
+    logGoose(`Goose raw stdout (head): ${head}`);
+    if (tail) {
+        logGoose(`Goose raw stdout (tail): ${tail}`);
+    }
+}
 async function runSecureGooseWithRetry(context, workingDir, recipePath, signal, maxRetries, timeoutMs) {
     const gooseConfig = vscode.workspace.getConfiguration('trident.goose');
     const provider = gooseConfig.get('provider', 'openrouter');
@@ -550,6 +645,7 @@ async function runSecureGooseWithRetry(context, workingDir, recipePath, signal, 
     let attempt = 0;
     let lastError = null;
     const max = Math.max(0, Math.min(3, maxRetries));
+    const resolvedRecipePath = resolveRecipePathForExtension(recipePath, workingDir);
     while (attempt <= max) {
         if (signal.aborted) {
             throw new Error('Goose execution canceled');
@@ -789,9 +885,10 @@ async function onVulnSelected(vuln) {
         let parsedInsight = rawInsight;
         if (typeof rawInsight === 'string') {
             try {
-                parsedInsight = JSON.parse(rawInsight);
+                parsedInsight = parseGooseOutput(rawInsight);
             }
-            catch {
+            catch (err) {
+                logGooseParseFailure(rawInsight, err);
                 throw new Error('Invalid JSON format from Goose');
             }
         }
@@ -1093,6 +1190,24 @@ function getWebviewContent(webview) {
           padding: 20px;
           margin: 20px 0;
           font-family: 'IBM Plex Mono', monospace;
+        }
+        .ai-pending {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 14px;
+          color: #C9C9C9;
+        }
+        .ai-spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(241,158,33,0.3);
+          border-top-color: #F19E21;
+          border-radius: 50%;
+          animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .ai-section:focus-within {
           border-color: #0678CF;
@@ -2217,7 +2332,7 @@ function getWebviewContent(webview) {
           if (insight.pending) {
             return '<div class="ai-section" role="status" aria-live="polite">' +
               '<div class="ai-header"><div class="ai-title"><i class="bi bi-robot"></i> AI Security Analysis</div></div>' +
-              '<div class="ai-content">Generating AI analysis…</div>' +
+              '<div class="ai-pending"><span class="ai-spinner" aria-hidden="true"></span><span>Generating AI analysis…</span></div>' +
               '<div style="margin-top:12px;"><button class="copy-after-btn" data-action="goose-cancel" aria-label="Cancel AI analysis">' +
               '<i class="bi bi-x-circle"></i> Cancel</button></div>' +
               '</div>';
