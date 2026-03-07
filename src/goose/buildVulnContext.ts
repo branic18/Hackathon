@@ -16,8 +16,18 @@ import {
   sanitizeCodeSnippet
 } from "./security";
 
+type CvssParsed = {
+  attackVector?: string;
+  attackComplexity?: string;
+  privilegesRequired?: string;
+  userInteraction?: string;
+  confidentiality?: string;
+  integrity?: string;
+  availability?: string;
+};
+
 // CVSS parsing helper functions
-function parseCvssVector(vectorString: string | null): any {
+function parseCvssVector(vectorString: string | null): CvssParsed | undefined {
   if (!vectorString || typeof vectorString !== 'string') {
     return undefined;
   }
@@ -27,7 +37,7 @@ function parseCvssVector(vectorString: string | null): any {
     return undefined;
   }
 
-  const metrics: any = {};
+  const metrics: CvssParsed = {};
   const parts = match[1].split('/');
   
   for (const part of parts) {

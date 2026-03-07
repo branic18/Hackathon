@@ -9,7 +9,7 @@
   "description": "",
   "main": "./out/extension.js",
   "scripts": {
-    "test": "npm run build && node tests/goose-ui-smoke.test.js && node tests/goose-ui-states.test.js && node tests/apply-code-fix.test.js && node tests/goose-cache.test.js && node tests/goose-sanitization.test.js && node tests/goose-concurrency.test.js && node tests/goose-webview-security.test.js",
+    "test": "npm run build && node tests/goose-ui-smoke.test.cjs && node tests/goose-ui-states.test.cjs && node tests/apply-code-fix.test.cjs && node tests/goose-cache.test.cjs && node tests/goose-sanitization.test.cjs && node tests/goose-concurrency.test.cjs && node tests/goose-webview-security.test.cjs",
     "build": "tsc -p ./",
     "watch": "tsc -p ./ --watch",
     "compile": "tsc -p ./",
@@ -28,7 +28,7 @@
   ],
   "author": "",
   "license": "ISC",
-  "type": "module",
+  "type": "commonjs",
   "activationEvents": [
     "onCommand:vulnerability-scanner.scan",
     "onCommand:vulnerability-scanner.showLogs"

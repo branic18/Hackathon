@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { promisify } from 'util';
@@ -47,7 +46,7 @@ export async function findFilesUsingPackage(
             .filter(file => !file.includes('.git'));
           usedInFiles.push(...files);
         }
-      } catch (error) {
+      } catch {
         // Continue with other patterns if one fails
         continue;
       }
@@ -99,7 +98,7 @@ async function checkConfigFiles(
         if (content.includes(packageName)) {
           usedInFiles.push(configFile);
         }
-      } catch (error) {
+      } catch {
         // Continue if file can't be read
         continue;
       }
@@ -132,7 +131,7 @@ async function fallbackFileSearch(
       if (isDependency) {
         usedInFiles.push('package.json');
       }
-    } catch (error) {
+    } catch {
       // Continue even if package.json can't be parsed
     }
   }

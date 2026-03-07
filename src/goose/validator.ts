@@ -9,14 +9,18 @@ export interface GooseVulnInsightValidator {
   filterSuspiciousContent(insight: GooseVulnInsight): GooseVulnInsight;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 export class JsonSchemaValidator implements GooseVulnInsightValidator {
   
   validate(data: unknown): GooseVulnInsight {
-    if (!data || typeof data !== 'object') {
+    if (!isRecord(data)) {
       throw new Error('Invalid GooseVulnInsight data type');
     }
     
-    const obj = data as any;
+    const obj = data;
     
     // Validate required fields
     const insight: GooseVulnInsight = {
@@ -152,11 +156,11 @@ export class JsonSchemaValidator implements GooseVulnInsightValidator {
   }
   
   private validateCodeFix(codeFix: unknown): CodeFix {
-    if (!codeFix || typeof codeFix !== 'object') {
+    if (!isRecord(codeFix)) {
       throw new Error('Invalid codeFix type');
     }
     
-    const obj = codeFix as any;
+    const obj = codeFix;
     
     return {
       filePath: this.validateFilePath(obj.filePath),

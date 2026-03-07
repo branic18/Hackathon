@@ -189,14 +189,107 @@ class VulnerabilityItem extends vscode.TreeItem {
     }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+type AuditError = {
+    summary?: string;
+    detail?: string;
+};
+
+function getAuditError(auditResults: unknown): AuditError | null {
+    if (!isRecord(auditResults)) return null;
+    const err = isRecord(auditResults.error) ? auditResults.error : null;
+    if (!err) return null;
+    const summary = typeof err.summary === 'string' ? err.summary : undefined;
+    const detail = typeof err.detail === 'string' ? err.detail : undefined;
+    return summary || detail ? { summary, detail } : { };
+}
+
+type VulnerabilitySelection = {
+    id?: string | number;
+    packageName?: string;
+    version?: string;
+    title?: string;
+    severity?: string;
+    cvss?: { score?: number; vectorString?: string };
+    cweIds?: string[];
+    cweNames?: string[];
+    githubAdvisoryId?: string;
+    githubSummary?: string;
+    githubUrl?: string;
+    paths?: string[];
+    usedInFiles?: string[];
+    environment?: string;
+    fixAvailable?: Record<string, unknown>;
+    codeSnippet?: string | null;
+};
+
+type FixInfo = {
+    type: "auto" | "manual" | "none";
+    name?: string;
+    version?: string;
+    isSemVerMajor?: boolean;
+    resolvesCount?: number;
+};
+
+type CodeSnippet = {
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    before: string;
+};
+
+function normalizeSeverity(value: unknown): "low" | "moderate" | "high" | "critical" {
+    return value === "low" || value === "moderate" || value === "high" || value === "critical"
+        ? value
+        : "moderate";
+}
+
+function normalizeEnvironment(value: unknown): "dev" | "staging" | "prod" | undefined {
+    return value === "dev" || value === "staging" || value === "prod" ? value : undefined;
+}
+
+function normalizePaths(value: unknown): string[][] {
+    if (!Array.isArray(value)) return [];
+    if (value.every((item) => typeof item === "string")) {
+        return (value as string[]).map((item) => [item]);
+    }
+    if (value.every((item) => Array.isArray(item) && item.every((entry) => typeof entry === "string"))) {
+        return value as string[][];
+    }
+    return [];
+}
+
+function normalizeFixInfo(value: unknown): FixInfo {
+    if (!isRecord(value)) return { type: "none" };
+    const type = value.type === "auto" || value.type === "manual" || value.type === "none" ? value.type : "none";
+    const name = typeof value.name === "string" ? value.name : undefined;
+    const version = typeof value.version === "string" ? value.version : undefined;
+    const isSemVerMajor = typeof value.isSemVerMajor === "boolean" ? value.isSemVerMajor : undefined;
+    const resolvesCount = typeof value.resolvesCount === "number" ? value.resolvesCount : undefined;
+    return { type, name, version, isSemVerMajor, resolvesCount };
+}
+
+function normalizeCodeSnippet(value: unknown): CodeSnippet | undefined {
+    if (!isRecord(value)) return undefined;
+    const filePath = typeof value.filePath === "string" ? value.filePath : undefined;
+    const startLine = typeof value.startLine === "number" ? value.startLine : undefined;
+    const endLine = typeof value.endLine === "number" ? value.endLine : undefined;
+    const before = typeof value.before === "string" ? value.before : undefined;
+    if (!filePath || startLine === undefined || endLine === undefined || !before) return undefined;
+    return { filePath, startLine, endLine, before };
+}
+
 async function runNpmAudit(panel: vscode.WebviewPanel, projectRoot: string): Promise<void> {
     panel.webview.html = getWebviewContent(panel.webview);
 
     try {
         const auditResults = await runAuditWithLockfileFallback(projectRoot);
-        if (auditResults && typeof auditResults === 'object' && (auditResults as any).error) {
-            const err = (auditResults as any).error;
-            const message = typeof err.summary === 'string' ? err.summary : (typeof err.detail === 'string' ? err.detail : 'npm audit failed');
+        const auditError = getAuditError(auditResults);
+        if (auditError) {
+            const message = auditError.summary ?? auditError.detail ?? 'npm audit failed';
             vscode.window.showErrorMessage(`npm audit failed: ${message}`);
             panel.webview.postMessage({ command: 'loadError', error: message });
             return;
@@ -237,7 +330,7 @@ function getRecipeVersion(recipePath: string): string {
         const resolved = path.resolve(recipePath);
         const stat = fs.statSync(resolved);
         return `${stat.mtimeMs}:${stat.size}`;
-    } catch (err) {
+    } catch {
         return 'unknown';
     }
 }
@@ -311,19 +404,20 @@ function savePersistentGooseCache() {
     }
 }
 
-function pruneCacheByAuditResults(auditResults: any) {
+function pruneCacheByAuditResults(auditResults: unknown) {
     const validKeys = new Set<string>();
-    const vulns = auditResults?.vulnerabilities || {};
+    const auditObj = isRecord(auditResults) ? auditResults : null;
+    const vulns = auditObj && isRecord(auditObj.vulnerabilities) ? auditObj.vulnerabilities : {};
     for (const [pkg, v] of Object.entries(vulns)) {
         validKeys.add(String(pkg));
-        const via = Array.isArray((v as any).via) ? (v as any).via : [];
-        via.forEach((item: any) => {
-            if (item && typeof item === 'object') {
+        const via = isRecord(v) && Array.isArray(v.via) ? v.via : [];
+        for (const item of via) {
+            if (isRecord(item)) {
                 if (item.source) validKeys.add(String(item.source));
                 if (item.url) validKeys.add(String(item.url));
                 if (item.title) validKeys.add(String(item.title));
             }
-        });
+        }
     }
     if (validKeys.size === 0) {
         gooseCache.loadEntries([]);
@@ -520,7 +614,7 @@ function cancelGooseAnalysis(vulnId: string) {
     sendToWebview({ type: 'gooseInsightError', vulnId, error: 'AI analysis canceled' });
 }
 
-export async function onVulnSelected(vuln: any) {
+export async function onVulnSelected(vuln: VulnerabilitySelection) {
     // ===== PHASE 1: SECURITY VALIDATION =====
     console.log('🔒 Starting secure vulnerability analysis...');
     const config = getGooseConfig();
@@ -603,7 +697,7 @@ export async function onVulnSelected(vuln: any) {
             vulnId: sanitizedVulnId,
             pkgName: sanitizedPkgName,
             pkgVersion: sanitizedVersion,
-            npmSeverity: vuln.severity,
+            npmSeverity: normalizeSeverity(vuln.severity),
             cvssScore: vuln.cvss?.score ?? null,
             cvssVector: vuln.cvss?.vectorString ?? null,
             cweIds: vuln.cweIds || [],
@@ -611,13 +705,13 @@ export async function onVulnSelected(vuln: any) {
             githubAdvisoryId: vuln.githubAdvisoryId,
             githubSummary: vuln.githubSummary,
             githubUrl: vuln.githubUrl,
-            paths: vuln.paths || [],
+            paths: normalizePaths(vuln.paths),
             usedInFiles: config.dataMode === 'metadata' ? [] : (vuln.usedInFiles || []), // Will be auto-detected if empty/missing
-            environment: vuln.environment || 'unknown', // Will be auto-detected if missing
+            environment: normalizeEnvironment(vuln.environment), // Will be auto-detected if missing
             projectType: 'web-app', // Enterprise project classification
             projectRoot: projectRoot, // Enable secure file analysis
-            fixInfo: vuln.fixAvailable || { type: 'none' },
-            codeSnippet: config.dataMode === 'metadata' ? null : (vuln.codeSnippet || null),
+            fixInfo: normalizeFixInfo(vuln.fixAvailable),
+            codeSnippet: config.dataMode === 'metadata' ? undefined : normalizeCodeSnippet(vuln.codeSnippet),
         });
 
         console.log(`📋 Context built with ${Object.keys(context).length} security-validated fields`);
@@ -672,10 +766,10 @@ export async function onVulnSelected(vuln: any) {
                 throw new Error('Invalid JSON format from Goose');
             }
         }
-        const obj = (parsedInsight && typeof parsedInsight === 'object') ? (parsedInsight as any) : null;
-        let validatedInsight: any;
-        let enterpriseInsight: any;
-        if (obj && obj.analysis) {
+        const obj = isRecord(parsedInsight) ? parsedInsight : null;
+        let validatedInsight: unknown;
+        let enterpriseInsight: Record<string, unknown>;
+        if (obj && obj.analysis !== undefined) {
             validatedInsight = validator.validate(obj.analysis);
             enterpriseInsight = {
                 ...obj,
@@ -683,17 +777,17 @@ export async function onVulnSelected(vuln: any) {
             };
         } else {
             validatedInsight = validator.validate(parsedInsight);
-            enterpriseInsight = {
-                ...validatedInsight
-            };
+            enterpriseInsight = isRecord(validatedInsight) ? { ...validatedInsight } : { analysis: validatedInsight };
         }
 
-        const analysisRef = enterpriseInsight.analysis || enterpriseInsight;
+        const analysisRef = isRecord(enterpriseInsight.analysis) ? enterpriseInsight.analysis : enterpriseInsight;
+        const priorityScore = typeof analysisRef.priorityScore === 'number' ? analysisRef.priorityScore : undefined;
+        const recommendedActionsCount = Array.isArray(analysisRef.recommendedActions) ? analysisRef.recommendedActions.length : 0;
         enterpriseInsight.accessibility = enterpriseInsight.accessibility || {
             ariaLabel: `Security analysis for ${sanitizedPkgName} vulnerability`,
             colorBlindFriendly: {
-                priorityPattern: analysisRef.priorityScore ?
-                    `Priority level ${analysisRef.priorityScore} out of 5` :
+                priorityPattern: priorityScore !== undefined ?
+                    `Priority level ${priorityScore} out of 5` :
                     'Priority assessment available',
             },
             keyboardHints: [
@@ -702,9 +796,9 @@ export async function onVulnSelected(vuln: any) {
                 'Use arrow keys within action lists'
             ],
             screenReaderContent: {
-                summary: `${sanitizedPkgName} vulnerability analysis complete with ${analysisRef.recommendedActions?.length || 0} recommended actions`,
-                priorityAnnouncement: analysisRef.priorityScore ?
-                    `Priority score ${analysisRef.priorityScore} out of 5` :
+                summary: `${sanitizedPkgName} vulnerability analysis complete with ${recommendedActionsCount} recommended actions`,
+                priorityAnnouncement: priorityScore !== undefined ?
+                    `Priority score ${priorityScore} out of 5` :
                     'Priority being calculated'
             }
         };
@@ -734,7 +828,7 @@ export async function onVulnSelected(vuln: any) {
         
         // Enhanced security audit log with accessibility status
         console.log(`✅ Enterprise AI analysis completed for ${sanitizedPkgName}@${sanitizedVersion}`);
-        console.log(`📊 Analysis includes: ${analysisRef.recommendedActions?.length || 0} actions, priority ${analysisRef.priorityScore || 'TBD'}/5`);
+        console.log(`📊 Analysis includes: ${recommendedActionsCount} actions, priority ${priorityScore ?? 'TBD'}/5`);
         console.log(`🔒 Security validation: PASSED | Accessibility: WCAG 2.1 AA | Format: Enterprise JSON`);
         console.log(`♿ Accessibility features: Screen reader support, keyboard navigation, color-blind friendly design`);
         

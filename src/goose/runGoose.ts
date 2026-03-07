@@ -14,8 +14,8 @@ export async function runGooseForVuln(
 ): Promise<GooseVulnInsight> {
   const validator = createGooseValidator();
   
-  return new Promise(async (resolve, reject) => {
-    try {
+  return new Promise((resolve, reject) => {
+    void (async () => {
       // Serialize params for Goose CLI
       const contextJson = JSON.stringify(context);
       const params = [
@@ -122,9 +122,7 @@ export async function runGooseForVuln(
         }
       }, 30000);
 
-    } catch (err) {
-      reject(err);
-    }
+    })().catch(reject);
   });
 }
 

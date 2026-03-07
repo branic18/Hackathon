@@ -3,11 +3,41 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { CodeSnippet } from './types';
 
 const writeFileAsync = promisify(fs.writeFile);
 const unlinkAsync = promisify(fs.unlink);
 const accessAsync = promisify(fs.access);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+type CvssData = {
+  score?: unknown;
+  vectorString?: unknown;
+  parsed?: unknown;
+};
+
+type CweData = {
+  ids?: unknown;
+  names?: unknown;
+};
+
+type AdvisoryData = {
+  id?: unknown;
+  summary?: unknown;
+  url?: unknown;
+};
+
+type FixData = {
+  type?: unknown;
+  name?: unknown;
+  version?: unknown;
+  isSemVerMajor?: unknown;
+  resolvesCount?: unknown;
+};
 
 /**
  * Security utilities for safe Goose execution and data handling
@@ -130,7 +160,7 @@ export function sanitizeId(id: string): string {
   }
   
   // Allow only alphanumeric, hyphens, underscores, colons, and dots
-  const sanitized = id.replace(/[^a-zA-Z0-9\-_:.]/g, '').substring(0, 100);
+  const sanitized = id.replace(/[^a-zA-Z0-9_.:-]/g, '').substring(0, 100);
   
   if (sanitized.length === 0) {
     throw new Error('Invalid ID format');
@@ -149,7 +179,7 @@ export function sanitizePackageName(name: string): string {
   
   // Validate against npm package name rules
   // Allow scoped packages (@org/package), letters, numbers, hyphens, underscores, dots
-  if (!/^(@[a-zA-Z0-9\-_]+\/)?[a-zA-Z0-9\-_.]+$/.test(name)) {
+  if (!/^(@[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9-_.]+$/.test(name)) {
     throw new Error('Invalid package name format');
   }
   
@@ -170,7 +200,7 @@ export function sanitizeVersion(version: string): string {
   }
   
   // Allow semver-compatible versions with range operators
-  const sanitized = version.replace(/[^a-zA-Z0-9\-_.^~>=<*|]/g, '').substring(0, 50);
+  const sanitized = version.replace(/[^a-zA-Z0-9-_.^~>=<*|]/g, '').substring(0, 50);
   
   if (sanitized.length === 0) {
     throw new Error('Invalid version format');
@@ -294,7 +324,7 @@ export function sanitizeProjectType(projectType: string): string {
   }
   
   // Allow only alphanumeric, spaces, hyphens, underscores
-  const sanitized = projectType.replace(/[^a-zA-Z0-9 \-_]/g, '').substring(0, 100);
+  const sanitized = projectType.replace(/[^a-zA-Z0-9 _-]/g, '').substring(0, 100);
   
   return sanitized || 'unknown';
 }
@@ -302,37 +332,68 @@ export function sanitizeProjectType(projectType: string): string {
 /**
  * Sanitizes CVSS data structure
  */
-export function sanitizeCvssData(cvss: any): any {
-  if (!cvss || typeof cvss !== 'object') {
+type CvssParsed = {
+  attackVector?: string;
+  attackComplexity?: string;
+  privilegesRequired?: string;
+  userInteraction?: string;
+  confidentiality?: string;
+  integrity?: string;
+  availability?: string;
+};
+
+function sanitizeCvssParsed(parsed: unknown): CvssParsed | undefined {
+  if (!isRecord(parsed)) return undefined;
+  const sanitized: CvssParsed = {};
+  const fields: (keyof CvssParsed)[] = [
+    'attackVector',
+    'attackComplexity',
+    'privilegesRequired',
+    'userInteraction',
+    'confidentiality',
+    'integrity',
+    'availability'
+  ];
+  for (const field of fields) {
+    const value = parsed[field];
+    if (typeof value === 'string') sanitized[field] = value;
+  }
+  return Object.keys(sanitized).length ? sanitized : undefined;
+}
+
+export function sanitizeCvssData(cvss: unknown): { score: number | null; vectorString: string | null; parsed?: CvssParsed } {
+  if (!isRecord(cvss)) {
     return { score: null, vectorString: null };
   }
   
+  const cvssData = cvss as CvssData;
   return {
-    score: typeof cvss.score === 'number' && cvss.score >= 0 && cvss.score <= 10 ? cvss.score : null,
-    vectorString: typeof cvss.vectorString === 'string' ? 
-      cvss.vectorString.replace(/[^A-Z0-9:\/\.]/g, '').substring(0, 100) : null,
-    parsed: cvss.parsed // Keep parsed data as-is since it's generated internally
+    score: typeof cvssData.score === 'number' && cvssData.score >= 0 && cvssData.score <= 10 ? cvssData.score : null,
+    vectorString: typeof cvssData.vectorString === 'string' ? 
+      cvssData.vectorString.replace(/[^A-Z0-9:/.]/g, '').substring(0, 100) : null,
+    parsed: sanitizeCvssParsed(cvssData.parsed)
   };
 }
 
 /**
  * Sanitizes CWE data structure
  */
-export function sanitizeCweData(cwe: any): any {
-  if (!cwe || typeof cwe !== 'object') {
+export function sanitizeCweData(cwe: unknown): { ids: string[]; names: string[] } | undefined {
+  if (!isRecord(cwe)) {
     return undefined;
   }
   
-  const sanitizedIds = Array.isArray(cwe.ids) ? 
-    cwe.ids
-      .filter((id: any) => typeof id === 'string')
-      .map((id: string) => id.replace(/[^A-Z0-9\-]/g, '').substring(0, 20))
+  const cweData = cwe as CweData;
+  const sanitizedIds = Array.isArray(cweData.ids) ? 
+    cweData.ids
+      .filter((id): id is string => typeof id === 'string')
+      .map((id: string) => id.replace(/[^A-Z0-9-]/g, '').substring(0, 20))
       .filter((id: string) => id.startsWith('CWE'))
       .slice(0, 10) : [];
       
-  const sanitizedNames = Array.isArray(cwe.names) ?
-    cwe.names
-      .filter((name: any) => typeof name === 'string')
+  const sanitizedNames = Array.isArray(cweData.names) ?
+    cweData.names
+      .filter((name): name is string => typeof name === 'string')
       .map((name: string) => name.substring(0, 200))
       .slice(0, 10) : [];
   
@@ -349,25 +410,26 @@ export function sanitizeCweData(cwe: any): any {
 /**
  * Sanitizes GitHub Advisory data
  */
-export function sanitizeAdvisoryData(advisory: any): any {
-  if (!advisory || typeof advisory !== 'object') {
+export function sanitizeAdvisoryData(advisory: unknown): { id?: string; summary?: string; url?: string } | undefined {
+  if (!isRecord(advisory)) {
     return undefined;
   }
   
-  const sanitized: any = {};
+  const advisoryData = advisory as AdvisoryData;
+  const sanitized: { id?: string; summary?: string; url?: string } = {};
   
-  if (advisory.id && typeof advisory.id === 'string') {
-    sanitized.id = advisory.id.replace(/[^A-Z0-9\-]/g, '').substring(0, 50);
+  if (typeof advisoryData.id === 'string') {
+    sanitized.id = advisoryData.id.replace(/[^A-Z0-9-]/g, '').substring(0, 50);
   }
   
-  if (advisory.summary && typeof advisory.summary === 'string') {
-    sanitized.summary = advisory.summary.substring(0, 500);
+  if (typeof advisoryData.summary === 'string') {
+    sanitized.summary = advisoryData.summary.substring(0, 500);
   }
   
-  if (advisory.url && typeof advisory.url === 'string') {
+  if (typeof advisoryData.url === 'string') {
     // Basic URL validation - must start with https://github.com
-    if (advisory.url.startsWith('https://github.com/') || advisory.url.startsWith('https://nvd.nist.gov/')) {
-      sanitized.url = advisory.url.substring(0, 200);
+    if (advisoryData.url.startsWith('https://github.com/') || advisoryData.url.startsWith('https://nvd.nist.gov/')) {
+      sanitized.url = advisoryData.url.substring(0, 200);
     }
   }
   
@@ -377,30 +439,31 @@ export function sanitizeAdvisoryData(advisory: any): any {
 /**
  * Sanitizes fix availability data
  */
-export function sanitizeFixData(fixData: any): any {
-  if (!fixData || typeof fixData !== 'object') {
+export function sanitizeFixData(fixData: unknown): { type: "auto" | "manual" | "none"; name?: string; version?: string; isSemVerMajor?: boolean; resolvesCount?: number } {
+  if (!isRecord(fixData)) {
     return { type: 'none' };
   }
   
   const validTypes = ['auto', 'manual', 'none'];
-  const type = validTypes.includes(fixData.type) ? fixData.type : 'none';
+  const fixDataObj = fixData as FixData;
+  const type = validTypes.includes(String(fixDataObj.type)) ? (fixDataObj.type as "auto" | "manual" | "none") : 'none';
   
-  const sanitized: any = { type };
+  const sanitized: { type: "auto" | "manual" | "none"; name?: string; version?: string; isSemVerMajor?: boolean; resolvesCount?: number } = { type };
   
-  if (fixData.name && typeof fixData.name === 'string') {
-    sanitized.name = sanitizePackageName(fixData.name);
+  if (typeof fixDataObj.name === 'string') {
+    sanitized.name = sanitizePackageName(fixDataObj.name);
   }
   
-  if (fixData.version && typeof fixData.version === 'string') {
-    sanitized.version = sanitizeVersion(fixData.version);
+  if (typeof fixDataObj.version === 'string') {
+    sanitized.version = sanitizeVersion(fixDataObj.version);
   }
   
-  if (typeof fixData.isSemVerMajor === 'boolean') {
-    sanitized.isSemVerMajor = fixData.isSemVerMajor;
+  if (typeof fixDataObj.isSemVerMajor === 'boolean') {
+    sanitized.isSemVerMajor = fixDataObj.isSemVerMajor;
   }
   
-  if (typeof fixData.resolvesCount === 'number' && fixData.resolvesCount >= 0) {
-    sanitized.resolvesCount = Math.min(fixData.resolvesCount, 1000);
+  if (typeof fixDataObj.resolvesCount === 'number' && fixDataObj.resolvesCount >= 0) {
+    sanitized.resolvesCount = Math.min(fixDataObj.resolvesCount, 1000);
   }
   
   return sanitized;
@@ -446,7 +509,7 @@ export async function executeWithRetry<T>(
  * Prevents command line argument injection
  */
 export async function secureGooseExecution(
-  vulnContext: any,
+  vulnContext: unknown,
   workingDir: string,
   recipePath: string,
   signal?: AbortSignal,
@@ -469,8 +532,6 @@ export async function secureGooseExecution(
     ];
     
     // Execute with security controls
-    const { spawn } = require('child_process');
-    
     return await new Promise((resolve, reject) => {
       const gooseProcess = spawn('goose', [
         'run',
