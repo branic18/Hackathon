@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.4](https://github.com/branic18/Trident/compare/v1.3.3...v1.3.4) (2026-03-08)
+
+
+### Bug Fixes
+
+* Added API key integration, accessible package nodes, resolved canvas being blank, added Overview, adjusted panel count + copy- publish- 2 ([8add38f](https://github.com/branic18/Trident/commit/8add38ffacc4426f32b13cf59ac43f29986d090e))
+* Added API key integration, accessible package nodes, resolved canvas being blank, added Overview, adjusted panel count + copy- publish- 2 ([d33f2f7](https://github.com/branic18/Trident/commit/d33f2f7caac2f72a8068b7e9e92a0dba66047036))
+
 ## [1.3.3](https://github.com/branic18/Trident/compare/v1.3.2...v1.3.3) (2026-03-08)
 
 
