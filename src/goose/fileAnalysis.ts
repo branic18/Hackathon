@@ -7,6 +7,9 @@ import { isPathWithinRoot } from './security';
 const execAsync = promisify(exec);
 const readFileAsync = promisify(fs.readFile);
 const existsAsync = promisify(fs.exists);
+const fileUseCache = new Map<string, string[]>();
+const snippetCache = new Map<string, { filePath: string; startLine: number; endLine: number; before: string } | undefined>();
+const MAX_CACHE_ENTRIES = 200;
 
 /**
  * Analyzes project files to find actual usage of a vulnerable package
@@ -16,6 +19,9 @@ export async function findFilesUsingPackage(
   packageName: string, 
   projectRoot: string
 ): Promise<string[]> {
+  const cacheKey = `${projectRoot}::${packageName}`;
+  const cached = fileUseCache.get(cacheKey);
+  if (cached) return cached;
   const usedInFiles: string[] = [];
   
   try {
@@ -56,11 +62,17 @@ export async function findFilesUsingPackage(
     await checkConfigFiles(packageName, projectRoot, usedInFiles);
     
     // Remove duplicates and return
-    return [...new Set(usedInFiles)].slice(0, 10); // Limit to 10 most relevant files
+    const result = [...new Set(usedInFiles)].slice(0, 10); // Limit to 10 most relevant files
+    fileUseCache.set(cacheKey, result);
+    if (fileUseCache.size > MAX_CACHE_ENTRIES) fileUseCache.clear();
+    return result;
   } catch (error) {
     console.error(`Error finding files using package ${packageName}:`, error);
     // Fallback: check common locations
-    return await fallbackFileSearch(packageName, projectRoot);
+    const result = await fallbackFileSearch(packageName, projectRoot);
+    fileUseCache.set(cacheKey, result);
+    if (fileUseCache.size > MAX_CACHE_ENTRIES) fileUseCache.clear();
+    return result;
   }
 }
 
@@ -148,15 +160,21 @@ export async function extractCodeSnippet(
   packageName: string,
   projectRoot: string
 ): Promise<{ filePath: string; startLine: number; endLine: number; before: string } | undefined> {
+  const cacheKey = `${projectRoot}::${packageName}::${filePath}`;
+  if (snippetCache.has(cacheKey)) return snippetCache.get(cacheKey);
   try {
     const fullPath = path.join(projectRoot, filePath);
 
     if (!isPathWithinRoot(fullPath, projectRoot)) {
       console.warn(`Skipping code snippet extraction outside project root: ${fullPath}`);
+      snippetCache.set(cacheKey, undefined);
+      if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
       return undefined;
     }
     
     if (!await existsAsync(fullPath)) {
+      snippetCache.set(cacheKey, undefined);
+      if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
       return undefined;
     }
 
@@ -186,13 +204,18 @@ export async function extractCodeSnippet(
       // No specific import found, return early lines if it's a config file
       if (filePath.includes('config') || filePath.includes('package.json')) {
         const snippetLines = lines.slice(0, Math.min(15, lines.length));
-        return {
+        const result = {
           filePath: filePath,
           startLine: 1,
           endLine: snippetLines.length,
           before: sanitizeCodeSnippet(snippetLines.join('\n'))
         };
+        snippetCache.set(cacheKey, result);
+        if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
+        return result;
       }
+      snippetCache.set(cacheKey, undefined);
+      if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
       return undefined;
     }
 
@@ -202,14 +225,19 @@ export async function extractCodeSnippet(
     const endLine = Math.min(lines.length - 1, targetLine + contextLines);
     const snippetLines = lines.slice(startLine, endLine + 1);
 
-    return {
+    const result = {
       filePath: filePath,
       startLine: startLine + 1, // 1-indexed for display
       endLine: endLine + 1,
       before: sanitizeCodeSnippet(snippetLines.join('\n'))
     };
+    snippetCache.set(cacheKey, result);
+    if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
+    return result;
   } catch (error) {
     console.error(`Error extracting code snippet from ${filePath}:`, error);
+    snippetCache.set(cacheKey, undefined);
+    if (snippetCache.size > MAX_CACHE_ENTRIES) snippetCache.clear();
     return undefined;
   }
 }

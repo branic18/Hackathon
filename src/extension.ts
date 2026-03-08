@@ -361,6 +361,7 @@ function normalizeCodeSnippet(value: unknown): CodeSnippet | undefined {
 
 const NPM_AUDIT_TIMEOUT_MS = 90_000;
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
+const EXEC_MAX_BUFFER = 50 * 1024 * 1024;
 
 async function runNpmAudit(panel: vscode.WebviewPanel, projectRoot: string): Promise<void> {
     panel.webview.html = getWebviewContent(panel.webview);
@@ -712,6 +713,12 @@ async function runSecureGooseWithRetry(
     throw lastError ?? new Error('Goose execution failed');
 }
 
+async function openSuggestedDiff(before: string, after: string, languageId: string | undefined, title: string) {
+    const beforeDoc = await vscode.workspace.openTextDocument({ content: before, language: languageId });
+    const afterDoc = await vscode.workspace.openTextDocument({ content: after, language: languageId });
+    await vscode.commands.executeCommand('vscode.diff', beforeDoc.uri, afterDoc.uri, title);
+}
+
 async function applyCodeFixFromWebview(codeFix: { filePath?: string; before?: string; after?: string } | null | undefined) {
     if (!codeFix || !codeFix.filePath || !codeFix.before || !codeFix.after) {
         vscode.window.showWarningMessage('Apply fix failed: missing code fix data.');
@@ -724,17 +731,20 @@ async function applyCodeFixFromWebview(codeFix: { filePath?: string; before?: st
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const projectRoot = workspaceFolder?.uri.fsPath;
     if (!projectRoot) {
-        vscode.window.showWarningMessage('Apply fix failed: no workspace open.');
+        await openSuggestedDiff(codeFix.before, codeFix.after, undefined, 'Suggested fix (no workspace)');
+        vscode.window.showWarningMessage('Apply fix failed: no workspace open. Showing suggested diff only.');
         return;
     }
 
     const resolvedPath = resolveWorkspacePath(codeFix.filePath, projectRoot);
     if (!resolvedPath) {
-        vscode.window.showWarningMessage('Apply fix failed: invalid file path.');
+        await openSuggestedDiff(codeFix.before, codeFix.after, undefined, 'Suggested fix (invalid file path)');
+        vscode.window.showWarningMessage('Apply fix failed: invalid file path. Showing suggested diff only.');
         return;
     }
     if (!fs.existsSync(resolvedPath)) {
-        vscode.window.showWarningMessage(`Apply fix failed: file not found: ${resolvedPath}`);
+        await openSuggestedDiff(codeFix.before, codeFix.after, undefined, `Suggested fix (missing file: ${path.basename(resolvedPath)})`);
+        vscode.window.showWarningMessage(`Apply fix failed: file not found: ${resolvedPath}. Showing suggested diff only.`);
         return;
     }
 
@@ -742,7 +752,8 @@ async function applyCodeFixFromWebview(codeFix: { filePath?: string; before?: st
     const fileText = doc.getText();
     const occurrences = countOccurrences(fileText, codeFix.before);
     if (occurrences === 0) {
-        vscode.window.showWarningMessage('Apply fix failed: expected code snippet not found in file.');
+        await openSuggestedDiff(codeFix.before, codeFix.after, doc.languageId, `Suggested fix (no exact match): ${path.basename(resolvedPath)}`);
+        vscode.window.showWarningMessage('Apply fix failed: expected code snippet not found in file. Showing suggested diff only.');
         return;
     }
 
@@ -1090,7 +1101,8 @@ async function ensureLockfileExists(projectRoot: string): Promise<void> {
     try {
         await execAsync('npm i --package-lock-only --ignore-scripts', {
             cwd: projectRoot,
-            timeout: NPM_INSTALL_TIMEOUT_MS
+            timeout: NPM_INSTALL_TIMEOUT_MS,
+            maxBuffer: EXEC_MAX_BUFFER
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1118,7 +1130,8 @@ async function runAuditWithLockfileFallback(projectRoot: string): Promise<unknow
         );
         await execAsync('npm i --package-lock-only --ignore-scripts', {
             cwd: projectRoot,
-            timeout: NPM_INSTALL_TIMEOUT_MS
+            timeout: NPM_INSTALL_TIMEOUT_MS,
+            maxBuffer: EXEC_MAX_BUFFER
         });
         return await runAudit(projectRoot);
     }
@@ -1128,7 +1141,8 @@ async function runAudit(projectRoot: string): Promise<unknown> {
     try {
         const { stdout } = await execAsync('npm audit --json', {
             cwd: projectRoot,
-            timeout: NPM_AUDIT_TIMEOUT_MS
+            timeout: NPM_AUDIT_TIMEOUT_MS,
+            maxBuffer: EXEC_MAX_BUFFER
         });
         return JSON.parse(stdout);
     } catch (error: unknown) {
@@ -1914,6 +1928,30 @@ function getWebviewContent(webview: vscode.Webview): string {
               }
               links.push({ source: nodeMap[name], target: nodeMap[targetName] });
             });
+          }
+
+          // Guardrail: cap rendering size to keep webview responsive
+          const MAX_NODES = 800;
+          if (nodes.length > MAX_NODES) {
+            const severityRank = { critical: 4, high: 3, moderate: 2, low: 1, info: 0 };
+            nodes.sort((a, b) => {
+              const ra = severityRank[a.severity] ?? 0;
+              const rb = severityRank[b.severity] ?? 0;
+              if (rb !== ra) return rb - ra;
+              return (b.vulCount || 0) - (a.vulCount || 0);
+            });
+            const kept = new Set(nodes.slice(0, MAX_NODES).map(n => n.id));
+            const filteredNodes = nodes.filter(n => kept.has(n.id));
+            const filteredLinks = links.filter(l => kept.has(l.source.id) && kept.has(l.target.id));
+            document.getElementById('metadata-panel').innerHTML =
+              '<div class="section"><div class="section-title">Large scan</div>' +
+              '<div class="item">Showing top ' + MAX_NODES + ' of ' + nodes.length + ' packages for performance.</div></div>';
+            allNodes = filteredNodes;
+            allNodeMap = filteredNodes.reduce((acc, n) => { acc[n.id] = n; return acc; }, {});
+            renderMetadata(vulCounts, depCounts);
+            renderGraph(filteredNodes, filteredLinks);
+            setupZoom();
+            return;
           }
 
           allNodes = nodes;
