@@ -698,7 +698,7 @@ async function runSecureGooseWithRetry(
             throw new Error('Goose execution canceled');
         }
         try {
-            return await secureGooseExecution(context, workingDir, recipePath, signal, timeoutMs, envOverrides);
+            return await secureGooseExecution(context, workingDir, resolvedRecipePath, signal, timeoutMs, envOverrides);
         } catch (err) {
             lastError = err;
             const { type } = classifyGooseError(err);
