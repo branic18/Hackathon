@@ -69,14 +69,14 @@ macOS / Linux (bash/zsh):
 
 bash
 export OPENAI_API_KEY="your-key-here"
-# Optional:
+ **Optional**:
 export GOOSE_PROVIDER="openai"
 export GOOSE_MODEL="gpt-4.1-mini"
 Windows PowerShell:
 
 powershell
 $env:OPENAI_API_KEY="your-key-here"
-# Optional:
+**Optional**:
 $env:GOOSE_PROVIDER="openai"
 $env:GOOSE_MODEL="gpt-4.1-mini"
 Launch VS Code from that same shell
