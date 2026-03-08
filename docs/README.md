@@ -224,7 +224,7 @@ Technical choices & tradeoffs.
 [Link to DECISION_LOG.md](https://docs.google.com/document/d/17cgNH-SKyaXy0CCviD1J5wXR3tXMuXZORyjeFMLUF9k/edit?usp=sharing).
 Risk Log
 Issues identified & fixed.
-[Link to RISK_LOG.md].
+[Link to RISK_LOG.md](https://docs.google.com/document/d/1_Cr4G-yxXoc2r3TxWeUxrLESKw9FmJbyzX0_ns4pNJw/edit?usp=sharing).
 Evidence Log
 Sources, assets, & attributions.
 [Link to EVIDENCE_LOG.md].
