@@ -2,17 +2,33 @@
 One-line Value Proposition: [Target User] gets [Outcome] in [Time] under [Constraint]. Example: Educators get shareable AI-powered lesson recaps in 60 seconds with zero setup.
 
 ## 🎯 Problem Statement
-Who: JavaScript and TypeScript developers in small teams, startups, and learning environments who use npm but don’t have a dedicated security team backing them.
-Problem: npm audit dumps a wall of text that’s noisy, confusing, and hard to connect back to the actual code and dependencies you work in every day..
-Impact: People waste time chasing low-impact alerts, feel overwhelmed by security warnings, and still risk shipping vulnerable code because it’s not obvious what really matters or what to fix first.
+**Who**  
+JavaScript and TypeScript developers in small teams, startups, and learning environments who use npm but don’t have a dedicated security team backing them.
+
+**Problem**  
+`npm audit` dumps a wall of text that’s noisy, confusing, and hard to connect back to the actual code and dependencies you work in every day.
+
+**Impact**  
+People waste time chasing low‑impact alerts, feel overwhelmed by security warnings, and still risk shipping vulnerable code because it’s not obvious what really matters or what to fix first.
+
 
 ## ✨ Solution Overview
-**What we built: ** Trident Vulnerability Package Scanner is a VS Code extension that runs npm audit --json on your Node.js project and turns the results into an interactive, D3-powered dependency graph you can explore without leaving your editor. It helps you quickly see which packages are vulnerable, how they’re connected, and what you can do about them, with optional AI assistance for explanations and fix suggestions.
-Key Features:
-**Visual dependency graph:** Renders your vulnerable npm dependencies as an interactive graph in a VS Code webview, so you can see how issues flow through your dependency tree instead of scrolling a wall of text. This makes it much easier to understand blast radius and prioritize what to tackle first.
-**AI-assisted vulnerability insights (Goose):** When enabled, the extension sends a sanitized vulnerability context to the Goose CLI to generate plain-language explanations, risk breakdowns, and suggested remediations. This saves you from manually deciphering CVEs and helps non-security experts take confident action.
-**In-editor fix workflow:** Provides an inspector panel with recommended npm install commands and, when available from Goose, code-fix suggestions you can preview and apply via VS Code’s edit APIs. This keeps the full loop—scan, understand, and fix—inside your existing workflow, without extra tools or dashboards.
-**Accessibility-first, human-centered design:** The UI, AI flows, and copy are built to be readable, keyboard-friendly, and low-jargon, so developers of all backgrounds can understand risks and suggested fixes without needing to be security experts or AI specialists.
+**What we built**  
+Trident Vulnerability Package Scanner is a VS Code extension that runs `npm audit --json` on your Node.js project and turns the results into an interactive, D3‑powered dependency graph you can explore without leaving your editor. It helps you quickly see which packages are vulnerable, how they’re connected, and what you can do about them, with optional AI assistance for explanations and fix suggestions.
+
+**Key Features**
+
+- **Visual dependency graph**  
+  Renders your vulnerable npm dependencies as an interactive graph in a VS Code webview, so you can see how issues flow through your dependency tree instead of scrolling a wall of text. This makes it much easier to understand blast radius and prioritize what to tackle first.
+
+- **AI‑assisted vulnerability insights (Goose)**  
+  When enabled, the extension sends a sanitized vulnerability context to the Goose CLI to generate plain‑language explanations, risk breakdowns, and suggested remediations. This saves you from manually deciphering CVEs and helps non‑security experts take confident action.
+
+- **In‑editor fix workflow**  
+  Provides an inspector panel with recommended `npm install` commands and, when available from Goose, code‑fix suggestions you can preview and apply via VS Code’s edit APIs. This keeps the full loop—scan, understand, and fix—inside your existing workflow, without extra tools or dashboards.
+
+- **Accessibility‑first, human‑centered design**  
+  The UI, AI flows, and copy are built to be readable, keyboard‑friendly, and low‑jargon, so developers of all backgrounds can understand risks and suggested fixes without needing to be security experts or AI specialists.
 
 
 
