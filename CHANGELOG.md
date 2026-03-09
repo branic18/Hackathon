@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.5](https://github.com/branic18/Trident/compare/v1.3.4...v1.3.5) (2026-03-09)
+
+
+### Bug Fixes
+
+* Added Goose onboarding for AI insights, added Goose loading states ([54cbbcd](https://github.com/branic18/Trident/commit/54cbbcd8f3a8ac7e76c9abcc84de4a7b866d70a6))
+
 ## [1.3.4](https://github.com/branic18/Trident/compare/v1.3.3...v1.3.4) (2026-03-08)
 
 
