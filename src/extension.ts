@@ -300,9 +300,9 @@ function getApiKeySettingsWebviewContent(hasKey: boolean, hasConsent: boolean): 
     <h3>3. API Key</h3>
     <p>Configure your AI provider. Keys are stored securely and encrypted locally.</p>
     <div class="provider"><strong>Pre-selected provider:</strong> OpenRouter</div>
-    <div class="provider"><strong>Pre-selected model:</strong> OpenAI 5.1</div>
+    <div class="provider"><strong>Pre-selected model:</strong> openai/gpt-5.2-codex</div>
     <p><strong>OpenRouter:</strong> Get your API key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:#0678CF;">openrouter.ai/keys</a> — create an account, add credits, then copy your API key.</p>
-    <p class="note">As of now, AI Insights only works with the provider OpenRouter and the OpenAI 5.1 model. Options for other providers and models will be available in the future.</p>
+    <p class="note">You can change the provider and model in settings (see <code>trident.goose.provider</code> and <code>trident.goose.model</code>). Any OpenRouter model you have access to should work.</p>
     ${hasKey ? `
     <div class="status" style="margin-bottom:8px;">API key is configured.</div>
     <div class="api-key-masked" style="font-family:monospace;font-size:13px;color:#BBBBBB;letter-spacing:2px;padding:8px 0;user-select:none;">${'*'.repeat(48)}</div>
@@ -2665,13 +2665,13 @@ function getWebviewContent(webview: vscode.Webview): string {
                 '<div class="ai-header"><i class="bi bi-exclamation-triangle"></i> Goose Setup Required</div>' +
                 '<div class="ai-content">Goose CLI not found.</div>' +
                 '<div class="ai-content" style="margin-top:8px;">' +
-                '<strong>Steps:</strong><br/>1) Install Goose CLI<br/>2) Ensure <code>goose --version</code> works in your terminal<br/>3) Set <code>OPENAI_API_KEY</code> and retry' +
+                '<strong>Steps:</strong><br/>1) Install Goose CLI<br/>2) Ensure <code>goose --version</code> works in your terminal<br/>3) Set your OpenRouter API key and retry' +
                 '</div></div>';
               insertOrReplaceAiSection(warningHtml);
               return warningHtml;
             }
             const errorHtml = '<div class="ai-section ai-error" role="alert" aria-label="AI Analysis Error">' +
-              '<div class="ai-header"><div class="ai-title"><i class="bi bi-robot"></i> AI Security Analysis</div></div>' +
+              '<div class="ai-header"><div class="ai-title"><i class="bi bi-robot"></i> AI Analysis Unavailable</div></div>' +
               '<div class="ai-content">' + escapeHtml(insight.error) + '</div>' +
               '</div>';
             insertOrReplaceAiSection(errorHtml);

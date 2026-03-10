@@ -110,7 +110,7 @@ class JsonSchemaValidator {
         if (typeof summary !== 'string') {
             throw new Error('Invalid devFacingSummary type');
         }
-        if (summary.length === 0 || summary.length > 300) {
+        if (summary.length === 0 || summary.length > 600) {
             throw new Error('Invalid devFacingSummary length');
         }
         return summary.trim();
